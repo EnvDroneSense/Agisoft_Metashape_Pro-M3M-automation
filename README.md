@@ -16,14 +16,14 @@ This folder contains portable, generic versions of the Metashape automation scri
 ### 2. `ms_automation_generic.py`
 - **Purpose**: Process multispectral drone images as Multi-Camera system
 - **Input**: TIF files with MS band identifiers (G, NIR, R, RE)
-- **Output**: Multispectral point cloud with band values for vegetation analysis
+- **Output**: Camera alignment, depth maps, point cloud, processing report
 - **GCP Files**: `gcp_route_001_MS.xml`, `gcp_route_002_MS.xml`, etc.
 - **M3M Support**: Native support for M3M's 4-band multispectral sensor array
 
 ### 3. `combined_automation_generic.py`
 - **Purpose**: Process RGB and MS images together in combined Multi-Camera system
 - **Input**: Both RGB (JPG) and MS (TIF) files
-- **Output**: Full pipeline including mesh, texture, DEM, orthomosaic exports
+- **Output**: Camera alignment, depth maps, point cloud, processing report
 - **GCP Files**: `gcp_route_001.xml`, `gcp_route_002.xml`, etc.
 - **M3M Support**: Leverages M3M's synchronized RGB and multispectral capture capabilities
 
@@ -487,7 +487,7 @@ process_all_routes(test_dcim, test_output, test_gcp)
    - Use lower resolution images if available
 
 3. **Expected Processing Times**:
-   - RGB: ~2-5 minutes per 10 images (CPU dependent)
+   - RGB: ~2-5 minutes per 10 images (CPU dependent & if you have a GPU)
    - MS: ~5-10 minutes per 10 captures (4x images)
    - Combined: ~10-15 minutes per route
 
@@ -497,4 +497,5 @@ process_all_routes(test_dcim, test_output, test_gcp)
 2. **Check GCP Files**: Ensure GCP XML files exist for each route before processing
 3. **Monitor Progress**: Watch console output for processing status and warnings
 4. **Verify Results**: Use the built-in verification functions to check saved products
+
 5. **Start Small**: Test with one route before processing large batches
