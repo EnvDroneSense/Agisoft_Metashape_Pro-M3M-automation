@@ -9,9 +9,11 @@ This folder contains portable, generic versions of all Metashape automation tool
 ### Method 1: Using the GUI Configuration Tool (Recommended)
 
 1. **Launch the tool**: Double-click `start_config_tool_generic.bat`
-2. **Configure paths**: Set script folder, DCIM, GCP, and output paths
-3. **Select processing**: Choose RGB, MS, or Combined processing with single or multiple routes
-4. **Generate commands**: Get ready-to-use Metashape console commands
+2. **Load previous config** (optional): Your settings are automatically loaded from previous session
+3. **Configure paths**: Set script folder, DCIM, GCP, and output paths (if not already loaded)
+4. **Select processing**: Choose RGB, MS, or Combined processing with single or multiple routes
+5. **Generate commands**: Get ready-to-use Metashape console commands
+6. **Save config** (optional): Save current configuration for backup or sharing
 
 ### Method 2: Direct Script Usage
 
@@ -217,6 +219,13 @@ run_combined_rgb_ms_automation()  # Process all configured RGB+MS routes togethe
 
 The `config_tool_generic.py` provides a user-friendly interface with the following features:
 
+### Configuration Management
+- **Auto-Save**: Automatically saves your settings for next session
+- **Load/Save Config**: Save configurations to JSON files for reuse
+- **Export/Import**: Share configurations between projects or team members
+- **Reset to Defaults**: One-click return to default settings
+- **Persistent Settings**: Your paths and preferences survive between sessions
+
 ### Visual Interface
 - **Path Selection**: Browse buttons for all required folders
 - **Processing Options**: Radio buttons for RGB, MS, or Combined processing
@@ -238,6 +247,34 @@ The `config_tool_generic.py` provides a user-friendly interface with the followi
 ### Route Modes
 - **Single Route**: Process one route at a time (faster, individual projects)
 - **Multiple Routes**: Combine multiple routes into one project (comprehensive coverage)
+
+### Configuration File Format
+The tool automatically saves settings to `metashape_config_generic.json`:
+```json
+{
+  "version": "1.0",
+  "timestamp": "2025-08-27T21:30:00",
+  "paths": {
+    "dcim": "path/to/dcim",
+    "gcp": "path/to/gcp", 
+    "output": "path/to/output",
+    "script_base": "path/to/scripts"
+  },
+  "processing": {
+    "type": "RGB",
+    "mode": "Single"
+  },
+  "script_paths": {
+    "rgb_single": "rgb_single_automation_generic.py",
+    "ms_single": "ms_single_automation_generic.py",
+    ...
+  },
+  "routes": {
+    "detected_count": 8,
+    "selected_routes": ["001", "006"]
+  }
+}
+```
 
 ## Advanced Configuration
 
@@ -496,13 +533,20 @@ output_path/
    start_config_tool_generic.bat
    ```
 
-2. **Configure in GUI**:
+2. **Configuration Management** (optional):
+   - **Load previous settings**: Your settings are automatically restored on startup
+   - **💾 Save Config**: Save current settings for future use
+   - **📁 Load Config**: Load a previously saved configuration file
+   - **📤 Export Config As...**: Export configuration for backup or sharing
+   - **🔄 Reset to Defaults**: Clear all settings and start fresh
+
+3. **Configure in GUI**:
    - Set script folder to your generic scripts location
    - Set DCIM folder to your drone data
    - Set GCP folder to your ground control points
    - Set output folder for results
 
-3. **Generate Commands**:
+4. **Generate Commands**:
    - Select RGB, MS, or Combined processing
    - Choose single or multiple route mode
    - Scan for routes and select the ones to process
@@ -893,6 +937,12 @@ print(f"Processing time: {end_time - start_time:.1f} seconds")
 1. tkinter is usually included with Python - try reinstalling Python
 2. On Linux: install python3-tk package (`sudo apt-get install python3-tk`)
 3. On macOS: use Python from python.org rather than system Python
+
+**Configuration issues:**
+1. **Settings not saving**: Check write permissions in script folder
+2. **Config file corrupted**: Delete `metashape_config_generic.json` and reconfigure
+3. **Settings not loading**: Verify JSON file format, or use "Reset to Defaults"
+4. **Export/Import errors**: Check file permissions and valid JSON format
 
 **Paths not updating:**
 1. Check folder permissions

@@ -22,14 +22,19 @@ from tkinter import ttk, filedialog, messagebox, scrolledtext
 import os
 import glob
 import re
+import json
 from pathlib import Path
+from datetime import datetime
 
 class MetashapeConfigTool:
     def __init__(self, root):
         self.root = root
         self.root.title("Metashape Automation Configuration Tool - Generic")
-        self.root.geometry("800x900")
+        self.root.geometry("1100x900")  # Wider window for better command display
         self.root.resizable(True, True)
+        
+        # Configuration file settings
+        self.config_file_path = os.path.join(os.path.dirname(__file__), "metashape_config_generic.json")
         
         # Variables
         self.dcim_path = tk.StringVar()
@@ -52,6 +57,7 @@ class MetashapeConfigTool:
         }
         
         self.setup_gui()
+        self.load_config()  # Load previous configuration on startup
         self.update_preview()
     
     def setup_gui(self):
@@ -70,8 +76,33 @@ class MetashapeConfigTool:
         # Title
         title_label = ttk.Label(main_frame, text="Metashape Automation Configuration Tool - Generic", 
                                font=("Arial", 14, "bold"))
-        title_label.grid(row=row, column=0, columnspan=3, pady=(0, 20))
+        title_label.grid(row=row, column=0, columnspan=3, pady=(0, 10))
         row += 1
+        
+        # Configuration Save/Load Section
+        config_manage_frame = ttk.LabelFrame(main_frame, text="Configuration Management", padding="10")
+        config_manage_frame.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        config_manage_frame.columnconfigure(1, weight=1)
+        row += 1
+        
+        # Config file path display
+        ttk.Label(config_manage_frame, text="Config File:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
+        self.config_path_label = ttk.Label(config_manage_frame, text=self.config_file_path, 
+                                          font=("Consolas", 8), foreground="blue")
+        self.config_path_label.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 10))
+        
+        # Config management buttons
+        config_btn_frame = ttk.Frame(config_manage_frame)
+        config_btn_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+        
+        ttk.Button(config_btn_frame, text="💾 Save Config", 
+                  command=self.save_config).grid(row=0, column=0, padx=(0, 10))
+        ttk.Button(config_btn_frame, text="📁 Load Config", 
+                  command=self.load_config_file).grid(row=0, column=1, padx=(0, 10))
+        ttk.Button(config_btn_frame, text="📤 Export Config As...", 
+                  command=self.export_config).grid(row=0, column=2, padx=(0, 10))
+        ttk.Button(config_btn_frame, text="🔄 Reset to Defaults", 
+                  command=self.reset_config).grid(row=0, column=3)
         
         # Script Configuration Section
         script_frame = ttk.LabelFrame(main_frame, text="Script Configuration", padding="10")
@@ -174,6 +205,15 @@ class MetashapeConfigTool:
             lambda e: self.commands_canvas.configure(scrollregion=self.commands_canvas.bbox("all"))
         )
         
+        # Bind canvas width changes to update the scrollable frame width
+        self.commands_canvas.bind(
+            "<Configure>",
+            lambda e: self.commands_canvas.itemconfig(
+                self.commands_canvas.create_window((0, 0), window=self.scrollable_commands_frame, anchor="nw"),
+                width=e.width
+            ) if hasattr(e, 'width') else None
+        )
+        
         self.commands_canvas.create_window((0, 0), window=self.scrollable_commands_frame, anchor="nw")
         self.commands_canvas.configure(yscrollcommand=scrollbar.set)
         
@@ -182,6 +222,10 @@ class MetashapeConfigTool:
         
         # Store reference to command widgets for clearing
         self.command_widgets = []
+        
+        # Status bar
+        self.status_label = ttk.Label(main_frame, text="Ready. Load config or configure script paths and select folders.")
+        self.status_label.grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=(10, 0))
     
     def configure_script_paths(self, script_folder, custom_paths=None):
         """Configure script paths programmatically"""
@@ -447,35 +491,250 @@ class MetashapeConfigTool:
             step_label = ttk.Label(line_frame, text=f"Step {i}:", font=("Arial", 9, "bold"))
             step_label.grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
             
-            # Command text (read-only)
-            command_text = tk.Text(line_frame, height=3, wrap=tk.WORD, font=("Consolas", 9))
-            command_text.insert(tk.END, command_line)
-            command_text.config(state=tk.DISABLED)
-            command_text.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 10))
+            # Command text (read-only entry for easy selection) - wider
+            command_entry = tk.Entry(line_frame, font=("Consolas", 8), state="readonly", width=90)
+            command_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 10))
+            command_entry.config(state="normal")
+            command_entry.delete(0, tk.END)
+            command_entry.insert(0, command_line)
+            command_entry.config(state="readonly")
             
             # Copy button
             copy_button = ttk.Button(
                 line_frame, 
-                text="Copy", 
+                text="📋 Copy", 
                 command=lambda cmd=command_line: self.copy_to_clipboard(cmd)
             )
             copy_button.grid(row=0, column=2, sticky=tk.E)
             
             # Store references
-            self.command_widgets.extend([line_frame, step_label, command_text, copy_button])
+            self.command_widgets.extend([line_frame, step_label, command_entry, copy_button])
+        
+        # Make sure the scrollable frame expands properly
+        self.scrollable_commands_frame.columnconfigure(0, weight=1)
         
         # Update canvas scroll region
         self.scrollable_commands_frame.update_idletasks()
         self.commands_canvas.configure(scrollregion=self.commands_canvas.bbox("all"))
     
+    def save_config(self):
+        """Save current configuration to file"""
+        try:
+            config_data = {
+                "version": "1.0",
+                "timestamp": datetime.now().isoformat(),
+                "paths": {
+                    "dcim": self.dcim_path.get(),
+                    "gcp": self.gcp_path.get(),
+                    "output": self.output_path.get(),
+                    "script_base": self.script_base_path.get()
+                },
+                "processing": {
+                    "type": self.processing_type.get(),
+                    "mode": self.route_mode.get()
+                },
+                "script_paths": self.script_paths,
+                "routes": {
+                    "detected_count": len(self.detected_routes),
+                    "selected_routes": [route['route_number'] for route in self.selected_routes]
+                }
+            }
+            
+            with open(self.config_file_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, indent=2, ensure_ascii=False)
+            
+            self.status_label.config(text=f"Configuration saved to {os.path.basename(self.config_file_path)}")
+            
+        except Exception as e:
+            error_msg = f"Failed to save configuration: {str(e)}"
+            self.status_label.config(text=error_msg)
+            messagebox.showerror("Save Error", error_msg)
+    
+    def load_config(self):
+        """Load configuration from default file"""
+        try:
+            if not os.path.exists(self.config_file_path):
+                self.status_label.config(text="No saved configuration found. Configure paths manually.")
+                return
+            
+            with open(self.config_file_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+            
+            # Load paths
+            paths = config_data.get("paths", {})
+            self.dcim_path.set(paths.get("dcim", ""))
+            self.gcp_path.set(paths.get("gcp", ""))
+            self.output_path.set(paths.get("output", ""))
+            self.script_base_path.set(paths.get("script_base", ""))
+            
+            # Load processing settings
+            processing = config_data.get("processing", {})
+            self.processing_type.set(processing.get("type", "RGB"))
+            self.route_mode.set(processing.get("mode", "Single"))
+            
+            # Load script paths if available
+            saved_script_paths = config_data.get("script_paths", {})
+            if saved_script_paths:
+                self.script_paths.update(saved_script_paths)
+            
+            # Update display
+            self.update_preview()
+            
+            # Auto-refresh routes if DCIM path exists
+            if self.dcim_path.get() and os.path.exists(self.dcim_path.get()):
+                self.refresh_routes()
+            
+            self.status_label.config(text=f"Configuration loaded from {os.path.basename(self.config_file_path)}")
+            
+        except Exception as e:
+            error_msg = f"Failed to load configuration: {str(e)}"
+            self.status_label.config(text=error_msg)
+            # Don't show error popup on startup, just log it
+    
+    def load_config_file(self):
+        """Load configuration from a selected file"""
+        config_file = filedialog.askopenfilename(
+            title="Load Configuration",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            initialdir=os.path.dirname(self.config_file_path)
+        )
+        
+        if not config_file:
+            return
+        
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+            
+            # Load paths
+            paths = config_data.get("paths", {})
+            self.dcim_path.set(paths.get("dcim", ""))
+            self.gcp_path.set(paths.get("gcp", ""))
+            self.output_path.set(paths.get("output", ""))
+            self.script_base_path.set(paths.get("script_base", ""))
+            
+            # Load processing settings
+            processing = config_data.get("processing", {})
+            self.processing_type.set(processing.get("type", "RGB"))
+            self.route_mode.set(processing.get("mode", "Single"))
+            
+            # Load script paths if available
+            saved_script_paths = config_data.get("script_paths", {})
+            if saved_script_paths:
+                self.script_paths.update(saved_script_paths)
+            
+            # Update display
+            self.update_preview()
+            
+            # Auto-refresh routes if DCIM path exists
+            if self.dcim_path.get() and os.path.exists(self.dcim_path.get()):
+                self.refresh_routes()
+            
+            self.status_label.config(text=f"Configuration loaded from {os.path.basename(config_file)}")
+            messagebox.showinfo("Config Loaded", f"Configuration successfully loaded from:\n{config_file}")
+            
+        except Exception as e:
+            error_msg = f"Failed to load configuration: {str(e)}"
+            self.status_label.config(text=error_msg)
+            messagebox.showerror("Load Error", error_msg)
+    
+    def export_config(self):
+        """Export configuration to a selected file"""
+        config_file = filedialog.asksaveasfilename(
+            title="Export Configuration As",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            initialdir=os.path.dirname(self.config_file_path),
+            initialfilename=f"metashape_config_generic_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
+        
+        if not config_file:
+            return
+        
+        try:
+            config_data = {
+                "version": "1.0",
+                "timestamp": datetime.now().isoformat(),
+                "exported_from": self.config_file_path,
+                "paths": {
+                    "dcim": self.dcim_path.get(),
+                    "gcp": self.gcp_path.get(),
+                    "output": self.output_path.get(),
+                    "script_base": self.script_base_path.get()
+                },
+                "processing": {
+                    "type": self.processing_type.get(),
+                    "mode": self.route_mode.get()
+                },
+                "script_paths": self.script_paths,
+                "routes": {
+                    "detected_count": len(self.detected_routes),
+                    "selected_routes": [route['route_number'] for route in self.selected_routes],
+                    "route_details": [
+                        {
+                            "route_number": route['route_number'],
+                            "image_count": route['image_count'],
+                            "folder_name": route['folder_name']
+                        } for route in self.detected_routes
+                    ]
+                }
+            }
+            
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, indent=2, ensure_ascii=False)
+            
+            self.status_label.config(text=f"Configuration exported to {os.path.basename(config_file)}")
+            messagebox.showinfo("Config Exported", f"Configuration successfully exported to:\n{config_file}")
+            
+        except Exception as e:
+            error_msg = f"Failed to export configuration: {str(e)}"
+            self.status_label.config(text=error_msg)
+            messagebox.showerror("Export Error", error_msg)
+    
+    def reset_config(self):
+        """Reset configuration to defaults"""
+        if messagebox.askyesno("Reset Configuration", 
+                              "Are you sure you want to reset all settings to defaults?\n"
+                              "This will clear all current paths and settings."):
+            self.dcim_path.set("")
+            self.gcp_path.set("")
+            self.output_path.set("")
+            self.script_base_path.set("")
+            self.processing_type.set("RGB")
+            self.route_mode.set("Single")
+            self.detected_routes = []
+            self.selected_routes = []
+            
+            # Reset script paths to defaults
+            self.script_paths = {
+                'rgb_single': 'rgb_single_automation_generic.py',
+                'ms_single': 'ms_single_automation_generic.py',
+                'rgb_ms_single': 'rgb_ms_single_automation_generic.py',
+                'rgb_combined': 'rgb_combined_automation_generic.py',
+                'ms_combined': 'ms_combined_automation_generic.py',
+                'rgb_ms_combined': 'rgb_ms_combined_automation_generic.py'
+            }
+            
+            # Clear commands
+            for widget in self.command_widgets:
+                widget.destroy()
+            self.command_widgets.clear()
+            
+            self.status_label.config(text="Configuration reset to defaults.")
+    
     def copy_to_clipboard(self, text):
         """Copy text to clipboard"""
-        self.root.clipboard_clear()
-        self.root.clipboard_append(text)
-        self.root.update()  # Required for clipboard to work
-        
-        # Show brief confirmation
-        messagebox.showinfo("Copied", "Command copied to clipboard!")
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+            self.root.update()  # Required for clipboard to work
+            # Show brief status instead of popup
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text=f"Command copied: {text[:50]}...")
+        except Exception as e:
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text=f"Copy failed: {str(e)}")
 
 def configure_script_paths(script_folder, custom_paths=None):
     """Configure script paths globally"""
